@@ -46,7 +46,8 @@ def _maybe_convert_timestamp(ts):
     return arr
 
 def dominant_frequency(signal, fs=FS):
-    if len(signal) < 2:
+    signal = np.array(signal, dtype=float)
+    if len(signal) < 2 or np.all(signal == 0):
         return 0.0
     yf = np.abs(rfft(signal))
     xf = rfftfreq(len(signal), 1.0/fs)
@@ -56,13 +57,18 @@ def dominant_frequency(signal, fs=FS):
     return float(xf[idx])
 
 def spectral_energy(signal, fs=FS):
-    if len(signal) < 2:
+    signal = np.array(signal, dtype=float)
+    if len(signal) < 2 or np.all(signal == 0):
         return 0.0
-    f, Pxx = welch(signal, fs=fs, nperseg=min(256, len(signal)))
-    return float(np.sum(Pxx))
+    try:
+        f, Pxx = welch(signal, fs=fs, nperseg=min(256, len(signal)))
+        return float(np.sum(Pxx))
+    except Exception:
+        return 0.0
 
 def fft_top_k(signal, k=TOP_K, fs=FS):
-    if len(signal) < 2:
+    signal = np.array(signal, dtype=float)
+    if len(signal) < 2 or np.all(signal == 0):
         return [0.0]*k, [0.0]*k
     yf = np.abs(rfft(signal))
     xf = rfftfreq(len(signal), 1.0/fs)
@@ -80,7 +86,7 @@ def extract_features_from_window(window):
     for prefix in ["ax","ay","az","gx","gy","gz"]:
         if prefix not in window.columns:
             continue
-        arr = window[prefix].values
+        arr = np.array(window[prefix].values, dtype=float)
         features[f"{prefix}_mean"] = float(np.mean(arr))
         features[f"{prefix}_std"] = float(np.std(arr, ddof=0))
         features[f"{prefix}_var"] = float(np.var(arr, ddof=0))
@@ -91,15 +97,9 @@ def extract_features_from_window(window):
         for i in range(TOP_K):
             features[f"{prefix}_fft_top{i+1}_mag"] = top_mags[i]
             features[f"{prefix}_fft_top{i+1}_freq"] = top_freqs[i]
+
     if all(c in window.columns for c in ["ax","ay","az"]):
         features["acc_sma"] = signal_magnitude_area(window, ["ax","ay","az"])
-    else:
-        features["acc_sma"] = 0.0
-    if all(c in window.columns for c in ["gx","gy","gz"]):
-        features["gyro_sma"] = signal_magnitude_area(window, ["gx","gy","gz"])
-    else:
-        features["gyro_sma"] = 0.0
-    if all(c in window.columns for c in ["ax","ay","az"]):
         res = np.sqrt(window["ax"]**2 + window["ay"]**2 + window["az"]**2)
         features["acc_res_mean"] = float(np.mean(res))
         features["acc_res_std"] = float(np.std(res, ddof=0))
@@ -116,6 +116,12 @@ def extract_features_from_window(window):
                     "acc_res_dom_freq","acc_res_spec_energy"] + \
                     [f"acc_res_fft_top{i+1}_{t}" for i in range(TOP_K) for t in ["mag","freq"]]:
             features[key] = 0.0
+
+    if all(c in window.columns for c in ["gx","gy","gz"]):
+        features["gyro_sma"] = signal_magnitude_area(window, ["gx","gy","gz"])
+    else:
+        features["gyro_sma"] = 0.0
+
     return features
 
 def sliding_windows(data_len, window_size, overlap):
@@ -151,9 +157,11 @@ def main():
         df_features = process_activity_file(filepath, label)
         print(f"  Extracted {len(df_features)} windows from {file}")
         all_features.append(df_features)
+
     if all_features:
         final_df = pd.concat(all_features, ignore_index=True)
         feature_cols = [c for c in final_df.columns if c not in ["activity","start_time"]]
+        # Z-score normalization
         final_df[feature_cols] = (final_df[feature_cols] - final_df[feature_cols].mean()) / final_df[feature_cols].std(ddof=0)
         out_path = os.path.join(OUTPUT_DIR, "features.csv")
         final_df.to_csv(out_path, index=False)
