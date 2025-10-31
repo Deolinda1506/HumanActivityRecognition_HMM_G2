@@ -1,5 +1,0 @@
-Activity,Sensitivity,Specificity,Accuracy
-jumping,0.0,1.0,0.3333
-standing,0.0,1.0,0.3333
-still,0.25,1.0,0.3333
-walking,1.0,0.0909,0.3333
