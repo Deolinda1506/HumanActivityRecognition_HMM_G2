@@ -137,11 +137,18 @@ def process_activity_file(filepath, label):
         ts = _maybe_convert_timestamp(df["time"].values)
         if ts is not None and len(ts) == len(df):
             df["time"] = ts
+    # Try to capture participant/session metadata if present in merged CSV
+    participant_val = df["participant"].iloc[0] if "participant" in df.columns and len(df) > 0 else None
+    session_val = df["session"].iloc[0] if "session" in df.columns and len(df) > 0 else None
     for start, end in sliding_windows(len(df), WINDOW_SIZE, OVERLAP):
         window = df.iloc[start:end].reset_index(drop=True)
         feats = extract_features_from_window(window)
         feats["activity"] = label
         feats["start_time"] = float(window["time"].iloc[0]) if "time" in window.columns else float(start)
+        if participant_val is not None:
+            feats["participant"] = participant_val
+        if session_val is not None:
+            feats["session"] = session_val
         feature_rows.append(feats)
     return pd.DataFrame(feature_rows)
 
@@ -160,7 +167,10 @@ def main():
 
     if all_features:
         final_df = pd.concat(all_features, ignore_index=True)
-        feature_cols = [c for c in final_df.columns if c not in ["activity","start_time"]]
+        feature_cols = [
+            c for c in final_df.columns
+            if c not in ["activity", "start_time", "participant", "session"]
+        ]
         # Z-score normalization
         final_df[feature_cols] = (final_df[feature_cols] - final_df[feature_cols].mean()) / final_df[feature_cols].std(ddof=0)
         out_path = os.path.join(OUTPUT_DIR, "features.csv")

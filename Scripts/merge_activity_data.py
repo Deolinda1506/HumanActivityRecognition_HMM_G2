@@ -13,7 +13,10 @@ import pandas as pd
 
 
 # Columns to save in output CSV
-OUTPUT_COLS = ["time", "ax", "ay", "az", "gx", "gy", "gz", "activity_type"]
+OUTPUT_COLS = [
+    "time", "ax", "ay", "az", "gx", "gy", "gz",
+    "activity_type", "participant", "session"
+]
 
 
 def find_activity_folders(root_folder):
@@ -31,16 +34,23 @@ def find_activity_folders(root_folder):
 
 
 def find_sensor_files(activity_folder):
-    """Find Accelerometer.csv and Gyroscope.csv in the folder."""
-    accel_file = None
-    gyro_file = None
+    """Find sessions under activity_folder and return (accel, gyro, session_name) tuples."""
+    sessions = []
+    roots = {}
     for root, _, files in os.walk(activity_folder):
         for f in files:
-            if f.lower() == "accelerometer.csv":
-                accel_file = os.path.join(root, f)
-            elif f.lower() == "gyroscope.csv":
-                gyro_file = os.path.join(root, f)
-    return accel_file, gyro_file
+            low = f.lower()
+            if low == "accelerometer.csv" or low == "gyroscope.csv":
+                roots.setdefault(root, {"accel": None, "gyro": None})
+                if low == "accelerometer.csv":
+                    roots[root]["accel"] = os.path.join(root, f)
+                else:
+                    roots[root]["gyro"] = os.path.join(root, f)
+    for root, pair in roots.items():
+        if pair["accel"] and pair["gyro"]:
+            session_name = os.path.basename(root)
+            sessions.append((pair["accel"], pair["gyro"], session_name))
+    return sessions
 
 
 def detect_timestamp(df):
@@ -109,16 +119,20 @@ def main():
     for activity, folders in activity_groups.items():
         merged_sessions = []
         for folder in folders:
-            accel, gyro = find_sensor_files(folder)
-            if not accel or not gyro:
+            participant = os.path.basename(os.path.dirname(folder))
+            sessions = find_sensor_files(folder)
+            if not sessions:
                 print(f"Skipping {folder}: missing sensor files")
                 continue
-            try:
-                merged = merge_session(accel, gyro)
-                merged["activity_type"] = activity
-                merged_sessions.append(merged)
-            except Exception as e:
-                print(f"Error in {folder}: {e}")
+            for accel, gyro, session_name in sessions:
+                try:
+                    merged = merge_session(accel, gyro)
+                    merged["activity_type"] = activity
+                    merged["participant"] = participant
+                    merged["session"] = session_name
+                    merged_sessions.append(merged)
+                except Exception as e:
+                    print(f"Error in {folder} ({session_name}): {e}")
 
         if merged_sessions:
             df_activity = pd.concat(merged_sessions, ignore_index=True)
