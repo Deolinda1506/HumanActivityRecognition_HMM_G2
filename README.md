@@ -132,19 +132,22 @@ pip package manager
 
 **Setup**
 
-Clone the repository
+**Clone the repository**
 
 bashgit clone https://github.com/yourusername/activity-recognition-hmm.git
+
 cd activity-recognition-hmm
 
-Create virtual environment
+**Create virtual environment**
+```
+python -m venv venv
+source venv/bin/activate 
+On Windows: venv\Scripts\activate
+```
+**Install dependencies**
+```
+pip install -r requirements.txt
 
-bashpython -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-Install dependencies
-
-bashpip install -r requirements.txt
 Required Packages
 numpy>=1.21.0
 pandas>=1.3.0
@@ -154,6 +157,8 @@ matplotlib>=3.4.0
 seaborn>=0.11.0
 hmmlearn>=0.2.7
 jupyter>=1.0.0
+
+```
 
 ### 📊 Usage
 **1. Data Collection**
